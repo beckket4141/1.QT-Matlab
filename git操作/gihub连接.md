@@ -3,7 +3,7 @@
 1. **添加远程仓库地址**  
    在你的本地仓库目录中打开终端或命令行工具，执行以下命令来添加一个名为 `origin` 的远程仓库：
    ```bash
-   git remote add origin git@github.com:beckket4141/Data_analyse.git
+   git remote add origin git@github.com:beckket4141/1.QT-Matlab.git
    ```
 
 2. **验证远程仓库是否添加成功**  
