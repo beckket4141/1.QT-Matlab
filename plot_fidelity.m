@@ -18,6 +18,15 @@ data = readmatrix(file_name);
 % 根据行列数确定 Bell 态的维度
 dim = nRows;  % 假设维度是行数（可以根据实际需求调整）
 
+% 让用户输入图像标题（可留空表示无标题）
+defaultTitle = '';
+answer = inputdlg({'输入图像标题（可留空）：'}, '设置标题', 1, {defaultTitle});
+if isempty(answer)
+    userTitle = '';
+else
+    userTitle = strtrim(answer{1});
+end
+
 % 创建一个图形窗口，动态调整图形大小
 figurePosition = [100, 100, 600 + 20 * nCols, 500 + 20 * nRows];  % 根据行列数调整图形大小
 figure('Position', figurePosition);
@@ -53,7 +62,11 @@ set(gca, 'YTick', 1:nRows, 'YTickLabel', labels, 'TickLength', [0 0]);
 % 设置坐标轴和标题
 xlabel('Experiment', 'FontSize', 12, 'FontWeight', 'bold');
 ylabel('Ideal', 'FontSize', 12, 'FontWeight', 'bold');
-title(sprintf('Fidelity Matrix (%dD Bell States)-量子-2mW-10s', dim), 'FontSize', 14, 'FontWeight', 'bold');
+if ~isempty(userTitle)
+    title(userTitle, 'FontSize', 14, 'FontWeight', 'bold');
+else
+    title('');
+end
 
 % 绘制单元格边框
 hold on;
