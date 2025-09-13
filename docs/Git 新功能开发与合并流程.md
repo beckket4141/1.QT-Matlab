@@ -1,6 +1,92 @@
 # Git 版本控制流程：添加新功能并合并分支
 
-在 Git 版本控制中，通过**分支隔离开发**是保障主分支稳定性、提升协作效率的核心实践。以下是完整的 “添加新功能并合并分支” 流程，涵盖本地操作、冲突解决、团队协作建议等关键环节。
+在 Git 版本控制中，通过**分支隔离开发**是保障主分支稳定性、提升协作效率的核心实践。以下是完整的 "添加新功能并合并分支" 流程，涵盖本地操作、冲突解决、团队协作建议等关键环节。
+
+## 0. 初始化本地仓库并连接GitHub（首次设置）
+
+在开始新功能开发之前，如果项目尚未与GitHub仓库关联，需要先完成本地仓库的初始化和远程仓库的连接。
+
+### 方法一：从零开始创建新仓库
+
+```
+# 1. 在项目根目录初始化Git仓库
+git init
+
+# 2. 添加所有文件到暂存区
+git add .
+
+# 3. 创建初始提交
+git commit -m "Initial commit: 项目初始化"
+
+# 4. 在GitHub上创建新仓库（通过网页界面）
+# 访问 https://github.com/new
+# 填写仓库名称、描述等信息
+# 注意：不要勾选"Initialize this repository with a README"
+
+# 5. 添加远程仓库地址（替换为你的实际仓库地址）
+git remote add origin https://github.com/用户名/仓库名.git
+git remote add origin git@github.com:beckket4141/formal-OAM-holograms-app.git
+
+# 6. 推送本地代码到GitHub主分支
+git branch -M main
+git push -u origin main
+```
+
+### 方法二：克隆现有GitHub仓库
+
+```
+# 1. 克隆远程仓库到本地
+git clone https://github.com/用户名/仓库名.git
+git clone git@github.com:beckket4141/1.QT-Matlab.git
+# 2. 进入项目目录
+cd 仓库名
+
+# 3. 查看远程仓库配置
+git remote -v
+```
+
+### 方法三：本地项目连接现有GitHub仓库
+
+```
+# 1. 在项目根目录初始化Git仓库
+git init
+
+# 2. 添加远程仓库地址
+git remote add origin https://github.com/用户名/仓库名.git
+
+# 3. 拉取远程仓库内容（如果远程仓库不为空）
+git pull origin main
+
+# 4. 添加本地文件并提交
+git add .
+git commit -m "Initial commit: 添加本地项目文件"
+
+# 5. 推送本地代码到GitHub
+git branch -M main
+git push -u origin main
+```
+
+### 验证连接状态
+
+```
+# 查看远程仓库配置
+git remote -v
+
+# 查看当前分支状态
+git status
+
+# 查看提交历史
+git log --oneline
+```
+
+### 常见问题解决
+
+| 问题场景 | 解决方法 |
+|---------|---------|
+| 提示"remote origin already exists" | 先删除现有远程仓库：`git remote remove origin`，再重新添加 |
+| 推送时提示"rejected" | 远程仓库已有内容，使用 `git pull origin main --allow-unrelated-histories` 合并历史 |
+| 无法推送代码 | 检查GitHub仓库权限，确认已正确配置SSH密钥或使用HTTPS认证 |
+| 分支名称不匹配 | 使用 `git branch -M main` 重命名本地分支，或修改GitHub默认分支设置 |
 
 ## 1. 创建新分支（隔离开发环境）
 
