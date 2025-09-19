@@ -453,30 +453,90 @@ end
 function [rho_opt, chi2_opt, info] = intelligent_result_selection(all_results, prior_info, options)
     % 智能结果选择
     % 基于多指标评估的客观选择，而不是简单选择卡方值最小的
-    
+
     info = struct();
     info.method = 'intelligent_selection';
-    
-    % 计算每个结果的综合评分
-    scores = zeros(length(all_results), 1);
-    for i = 1:length(all_results)
-        scores(i) = calculate_comprehensive_score(all_results(i), prior_info, options);
+
+    num_results = length(all_results);
+    scores = -inf(num_results, 1);
+
+    methods = {all_results.method};
+    linear_idx = find(strcmp(methods, 'linear'), 1, 'first');
+
+    success_mask = false(num_results, 1);
+    finite_mask = false(num_results, 1);
+    for i = 1:num_results
+        if isfield(all_results(i), 'info') && isfield(all_results(i).info, 'success')
+            success_mask(i) = logical(all_results(i).info.success);
+        end
+        finite_mask(i) = isfinite(all_results(i).chi2);
     end
-    
-    % 选择评分最高的结果
-    [~, best_idx] = max(scores);
-    rho_opt = all_results(best_idx).rho;
-    chi2_opt = all_results(best_idx).chi2;
-    
-    info.selected_method = all_results(best_idx).method;
+
+    candidate_mask = success_mask & finite_mask;
+    filter_stage = 'success';
+    if ~any(candidate_mask)
+        candidate_mask = finite_mask;
+        filter_stage = 'finite';
+    end
+
+    info.success_mask = success_mask;
+    info.finite_mask = finite_mask;
+    info.candidate_mask = candidate_mask;
+    info.filter_stage = filter_stage;
+
+    candidate_indices = find(candidate_mask);
+    for idx = candidate_indices'
+        scores(idx) = calculate_comprehensive_score(all_results(idx), prior_info, options);
+    end
+
+    fallback_used = false;
+    if ~isempty(candidate_indices)
+        [best_score, best_idx] = max(scores);
+        if ~isfinite(best_score) && ~isempty(linear_idx)
+            best_idx = linear_idx;
+            best_score = scores(best_idx);
+            fallback_used = true;
+        end
+    elseif ~isempty(linear_idx)
+        best_idx = linear_idx;
+        best_score = scores(best_idx);
+        fallback_used = true;
+    else
+        best_idx = 1;
+        best_score = scores(best_idx);
+        fallback_used = true;
+    end
+
+    if fallback_used && ~isempty(linear_idx) && ~candidate_mask(best_idx)
+        % 如果触发兜底且线性解未参与评分，则补充一次评分计算
+        if isfinite(all_results(best_idx).chi2)
+            scores(best_idx) = calculate_comprehensive_score(all_results(best_idx), prior_info, options);
+            best_score = scores(best_idx);
+        end
+    end
+
+    best_result = all_results(best_idx);
+
+    rho_opt = best_result.rho;
+    chi2_opt = best_result.chi2;
+
+    info.selected_method = best_result.method;
     info.scores = scores;
-    info.best_score = scores(best_idx);
+    info.best_score = best_score;
+    info.best_index = best_idx;
+    info.fallback_to_linear = fallback_used;
+    info.valid_indices = candidate_indices;
 end
 
 function score = calculate_comprehensive_score(result, prior_info, options)
     % 计算综合评分
     % 考虑卡方值、物理有效性、秩一致性等多个指标
-    
+
+    if ~isfield(result, 'chi2') || ~isfinite(result.chi2)
+        score = -inf;
+        return;
+    end
+
     % 1. 卡方值评分（越小越好）
     chi2_score = 1 / (1 + result.chi2);
     

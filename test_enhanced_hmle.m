@@ -78,9 +78,36 @@ try
         score = optimization_info.selection_info.scores(i);
         fprintf('方法: %s, 综合评分: %.4f\n', result.method, score);
     end
-    
+
+    fprintf('\n=== 智能选择过滤逻辑测试 ===\n');
+    % 构造包含失败起点的结果集合
+    failing_results = [ ...
+        struct('rho', rho_linear, 'chi2', inf, 'method', 'linear', 'info', struct('success', false)); ...
+        struct('rho', rho_linear, 'chi2', NaN, 'method', 'random_fail', 'info', struct('success', false)); ...
+        struct('rho', rho_opt, 'chi2', final_chi2, 'method', 'hybrid_success', 'info', struct('success', true)) ...
+    ];
+
+    [rho_filtered, chi2_filtered, selection_info_filtered] = intelligent_result_selection(...
+        failing_results, optimization_info.prior_info, options);
+
+    fprintf('过滤后选择的方法: %s, 卡方: %.6f\n', ...
+        selection_info_filtered.selected_method, chi2_filtered);
+    assert(strcmp(selection_info_filtered.selected_method, 'hybrid_success'), ...
+        '智能结果选择未正确过滤失败起点');
+
+    % 测试所有候选失败时是否兜底线性解
+    fallback_results = failing_results(1:2);
+    [rho_fallback, chi2_fallback, selection_info_fallback] = intelligent_result_selection(...
+        fallback_results, optimization_info.prior_info, options);
+    fprintf('兜底选择的方法: %s, fallback 标记: %d\n', ...
+        selection_info_fallback.selected_method, selection_info_fallback.fallback_to_linear);
+    assert(strcmp(selection_info_fallback.selected_method, 'linear'), ...
+        '兜底逻辑未返回线性解');
+    assert(selection_info_fallback.fallback_to_linear, ...
+        '兜底标记未正确设置');
+
     fprintf('\n=== 增强版HMLE测试成功完成 ===\n');
-    
+
 catch ME
     fprintf('\n=== 测试失败 ===\n');
     fprintf('错误信息: %s\n', ME.message);
