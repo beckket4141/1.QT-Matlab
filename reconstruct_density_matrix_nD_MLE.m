@@ -36,7 +36,11 @@ function [rho_opt, final_chi2] = reconstruct_density_matrix_nD_MLE(PnD, rho_r, d
 %                        'StepTolerance', 1e-8, ...         % 放宽步长容忍度
 %                        'ConstraintTolerance', 1e-8);     % 放宽约束容忍度
     % 使用初步求解得到的密度矩阵作为初始猜测
-    initial_guess = FindInitialT(rho_r, dimension);
+    rho_initial = rho_r;
+    if ~isempty(rho_initial)
+        rho_initial = makephysical(rho_initial);
+    end
+    initial_guess = FindInitialT(rho_initial, dimension);
 
     % 优化参数的上下限（根据维度确定）
     num_params = length(initial_guess);

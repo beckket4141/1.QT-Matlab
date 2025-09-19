@@ -21,7 +21,11 @@ function [rho_opt, final_chi2, optimization_info] = reconstruct_density_matrix_n
     all_results = [];
     
     % 1. 使用原始线性重构结果作为起点
-    initial_guess_linear = FindInitialT(rho_r, dimension);
+    rho_initial = rho_r;
+    if ~isempty(rho_initial)
+        rho_initial = makephysical(rho_initial);
+    end
+    initial_guess_linear = FindInitialT(rho_initial, dimension);
     [rho_linear, chi2_linear] = optimize_single_start(initial_guess_linear, p, dimension, max_steps);
     all_results = [all_results; struct('rho', rho_linear, 'chi2', chi2_linear, 'method', 'linear')];
     
@@ -111,7 +115,11 @@ function random_guess = generate_random_initial_guess(dimension, rho_r)
     num_params = num_parameters * 2 - dimension;
     
     % 基于线性重构结果添加随机扰动
-    base_guess = FindInitialT(rho_r, dimension);
+    rho_for_guess = rho_r;
+    if ~isempty(rho_for_guess)
+        rho_for_guess = makephysical(rho_for_guess);
+    end
+    base_guess = FindInitialT(rho_for_guess, dimension);
     
     % 添加高斯噪声
     noise_scale = 0.1; % 噪声强度

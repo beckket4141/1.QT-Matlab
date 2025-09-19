@@ -294,7 +294,11 @@ function [rho_opt, chi2_opt, info] = optimize_linear_start(PnD, rho_prior, dimen
     
     try
         % 使用线性重构结果作为起点
-        initial_guess = FindInitialT(rho_prior, dimension);
+        rho_initial = rho_prior;
+        if ~isempty(rho_initial)
+            rho_initial = makephysical(rho_initial);
+        end
+        initial_guess = FindInitialT(rho_initial, dimension);
         
         % 执行优化
         [rho_opt, chi2_opt, opt_info] = optimize_single_start(initial_guess, PnD, dimension, options);
@@ -691,7 +695,8 @@ function random_guess = generate_random_initial_guess(dimension, rho_prior, opti
     % 基于先验信息生成随机起点
     if ~isempty(rho_prior)
         % 使用先验信息作为中心
-        prior_guess = FindInitialT(rho_prior, dimension);
+        rho_for_guess = makephysical(rho_prior);
+        prior_guess = FindInitialT(rho_for_guess, dimension);
         noise_level = 0.1;
         random_guess = prior_guess + noise_level * randn(size(prior_guess));
     else
