@@ -39,11 +39,16 @@ function [rho_opt, final_chi2, optimization_info] = reconstruct_density_matrix_n
     
     % 数据预处理和验证
     [PnD_processed, data_quality] = preprocess_measurement_data(PnD, dimension, options);
-    
+
     % 显示开始信息
     if options.verbose
         fprintf('\n=== 增强版HMLE量子态重构开始 ===\n');
         fprintf('维度: %d, 数据质量: %.3f\n', dimension, data_quality.overall_quality);
+        if data_quality.fallback_triggered && ~isempty(data_quality.warning)
+            fprintf('预处理警告: %s\n', data_quality.warning);
+        elseif ~data_quality.valid && ~isempty(data_quality.warning)
+            fprintf('预处理提示: %s\n', data_quality.warning);
+        end
     end
     
     % ==================== 2. 多信息融合的先验分析 ====================
@@ -137,23 +142,93 @@ function options = set_default_options(options, dimension)
     if ~isfield(options, 'max_rank'), options.max_rank = dimension; end
     if ~isfield(options, 'chi2_threshold'), options.chi2_threshold = 1e-4; end
     if ~isfield(options, 'physical_tolerance'), options.physical_tolerance = 1e-10; end
+    if ~isfield(options, 'probability_sum_threshold'), options.probability_sum_threshold = 1e-8; end
+    if ~isfield(options, 'probability_sum_fallback'), options.probability_sum_fallback = 'uniform'; end
 end
 
 function [PnD_processed, data_quality] = preprocess_measurement_data(PnD, dimension, options)
     % 数据预处理和质量评估
     % 包括数据清洗、归一化、噪声评估等
-    
+
     % 数据清洗
     PnD_processed = PnD;
+    PnD_processed(~isfinite(PnD_processed)) = 0;  % 移除 NaN 和 Inf
     PnD_processed(PnD_processed < 0) = 0;  % 确保非负
-    PnD_processed = PnD_processed / sum(PnD_processed);  % 归一化
-    
-    % 数据质量评估
+
+    % 归一化前的总和
+    total_sum = sum(PnD_processed);
+    threshold = options.probability_sum_threshold;
+
+    % 初始化数据质量结构体
     data_quality = struct();
-    data_quality.noise_level = calculate_noise_level(PnD_processed);
-    data_quality.condition_number = calculate_condition_number(PnD_processed);
-    data_quality.entropy = calculate_entropy(PnD_processed);
-    data_quality.overall_quality = (1 - data_quality.noise_level) * (1 / data_quality.condition_number) * data_quality.entropy;
+    data_quality.sum_before_normalization = total_sum;
+    data_quality.sum_threshold = threshold;
+    data_quality.fallback_triggered = false;
+    data_quality.fallback_strategy = 'normalize';
+    data_quality.warning = '';
+    data_quality.valid = true;
+
+    % 处理总和过小的情况
+    if ~isfinite(total_sum) || total_sum <= threshold
+        data_quality.fallback_triggered = true;
+        data_quality.fallback_strategy = lower(options.probability_sum_fallback);
+
+        switch data_quality.fallback_strategy
+            case 'uniform'
+                num_elements = numel(PnD_processed);
+                if num_elements == 0
+                    error('preprocess_measurement_data:EmptyDistribution', ...
+                          '测量概率向量为空，无法执行预处理。');
+                end
+                PnD_processed = ones(num_elements, 1) / num_elements;
+                data_quality.warning = sprintf(['测量概率总和 %.3e 低于阈值 %.3e，', ...
+                    '已使用均匀分布作为回退策略。'], total_sum, threshold);
+            case 'error'
+                error('preprocess_measurement_data:InvalidTotalProbability', ...
+                      '测量概率总和 %.3e 低于阈值 %.3e。', total_sum, threshold);
+            otherwise
+                error('preprocess_measurement_data:UnknownFallback', ...
+                      '未知的回退策略：%s。', options.probability_sum_fallback);
+        end
+    else
+        PnD_processed = PnD_processed / total_sum;  % 正常归一化
+    end
+
+    % 确保归一化后的分布有效
+    if any(~isfinite(PnD_processed)) || abs(sum(PnD_processed) - 1) > 1e-6
+        data_quality.valid = false;
+        data_quality.warning = '归一化后的测量概率分布无效（包含 NaN/Inf 或总和不为 1）。';
+    end
+
+    data_quality.sum_after_normalization = sum(PnD_processed);
+    data_quality.processed_distribution = PnD_processed;
+
+    % 数据质量评估（仅在分布有效时计算）
+    if data_quality.valid
+        data_quality.noise_level = calculate_noise_level(PnD_processed);
+        condition_number = calculate_condition_number(PnD_processed);
+        if ~isfinite(condition_number) || condition_number <= 0
+            inv_condition_number = 0;
+        else
+            inv_condition_number = 1 / condition_number;
+        end
+        data_quality.condition_number = condition_number;
+        data_quality.entropy = calculate_entropy(PnD_processed);
+
+        % 确保噪声水平在 [0,1]
+        data_quality.noise_level = max(0, min(1, data_quality.noise_level));
+
+        overall_quality = (1 - data_quality.noise_level) * inv_condition_number * data_quality.entropy;
+        if ~isfinite(overall_quality) || overall_quality < 0
+            overall_quality = 0;
+        end
+        data_quality.overall_quality = overall_quality;
+    else
+        data_quality.noise_level = NaN;
+        data_quality.condition_number = Inf;
+        data_quality.entropy = NaN;
+        data_quality.overall_quality = 0;
+    end
 end
 
 function [prior_info, rho_prior] = multi_source_prior_analysis(PnD, rho_r, dimension, options)
@@ -261,11 +336,17 @@ end
 function options = adaptive_parameter_adjustment(options, data_quality, prior_info)
     % 自适应参数调整
     % 根据数据质量和先验信息动态调整算法参数
-    
+
+    if isfield(data_quality, 'overall_quality') && isfinite(data_quality.overall_quality)
+        quality_score = data_quality.overall_quality;
+    else
+        quality_score = 0;
+    end
+
     % 根据数据质量调整迭代次数
-    if data_quality.overall_quality > 0.8
+    if quality_score > 0.8
         options.max_iterations = round(options.max_iterations * 0.8);  % 高质量数据，减少迭代
-    elseif data_quality.overall_quality < 0.5
+    elseif quality_score < 0.5
         options.max_iterations = round(options.max_iterations * 1.5);  % 低质量数据，增加迭代
     end
     
